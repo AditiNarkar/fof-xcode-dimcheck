@@ -5,20 +5,145 @@
 //  Created by Aditi Narkar on 2/4/2026.
 //
 
+
 import SwiftUI
 
+// Hardcoded spec for Phase 1 — a standard cardboard box (mm)
+let boxSpec = SIMD3<Float>(200, 150, 100)   // L × W × H in mm
+let tolerance: Float = 5.0                  // ±5 mm
+
 struct ContentView: View {
+//    @State means "this variable controls the UI".
+    @State private var scannedDimensions: SIMD3<Float>? = nil
+    @State private var showAR = false
+    
     var body: some View {
-        VStack {
-            Image(systemName: "globe")
-                .imageScale(.large)
-                .foregroundStyle(.tint)
-            Text("Hello, world!")
+        NavigationStack {
+            VStack(spacing: 24) {
+                
+                // Spec card
+                GroupBox("Official spec — test box") {
+                    DimRow(label: "Length", value: boxSpec.x)
+                    DimRow(label: "Width",  value: boxSpec.y)
+                    DimRow(label: "Height", value: boxSpec.z)
+                    Text("Tolerance ±\(Int(tolerance)) mm")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                .padding(.horizontal)
+                
+                // Scan button
+                Button {
+                    showAR = true
+                } label: {
+                    Label("Scan this product", systemImage: "viewfinder")
+                        .frame(maxWidth: .infinity)
+                        .padding()
+                        .background(Color.accentColor)
+                        .foregroundStyle(.white)
+                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                }
+                .padding(.horizontal)
+                
+                // Result card
+                if let dims = scannedDimensions {
+                    ResultCard(scanned: dims, spec: boxSpec, tolerance: tolerance)
+                        .padding(.horizontal)
+                }
+                
+                Spacer()
+            }
+            .navigationTitle("DimCheck")
+            .sheet(isPresented: $showAR) {
+                ARSheetView(scannedDimensions: $scannedDimensions, isPresented: $showAR)
+            }
         }
-        .padding()
     }
 }
 
-#Preview {
-    ContentView()
+struct DimRow: View {
+    let label: String; let value: Float
+    var body: some View {
+        HStack {
+            Text(label).foregroundStyle(.secondary)
+            Spacer()
+            Text(String(format: "%.0f mm", value)).monospacedDigit()
+        }
+    }
+}
+
+struct ResultCard: View {
+    let scanned: SIMD3<Float>
+    let spec: SIMD3<Float>
+    let tolerance: Float
+    
+    var pass: Bool {
+        abs(scanned.x - spec.x) <= tolerance &&
+        abs(scanned.y - spec.y) <= tolerance &&
+        abs(scanned.z - spec.z) <= tolerance
+    }
+    
+    var body: some View {
+        GroupBox {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Text("Scan result")
+                        .font(.headline)
+                    Spacer()
+                    Label(pass ? "Pass" : "Fail",
+                          systemImage: pass ? "checkmark.circle.fill" : "xmark.circle.fill")
+                        .foregroundStyle(pass ? .green : .red)
+                        .font(.headline)
+                }
+                Divider()
+                CompareRow(label: "Length", scanned: scanned.x, spec: spec.x, tol: tolerance)
+                CompareRow(label: "Width",  scanned: scanned.y, spec: spec.y, tol: tolerance)
+                CompareRow(label: "Height", scanned: scanned.z, spec: spec.z, tol: tolerance)
+            }
+        }
+    }
+}
+
+struct CompareRow: View {
+    let label: String
+    let scanned: Float; let spec: Float; let tol: Float
+    var delta: Float { scanned - spec }
+    var ok: Bool { abs(delta) <= tol }
+    
+    var body: some View {
+        HStack {
+            Text(label).foregroundStyle(.secondary).frame(width: 60, alignment: .leading)
+            Text(String(format: "%.1f mm", scanned * 1000)).monospacedDigit()
+            Spacer()
+            Text(String(format: "%+.1f mm", delta * 1000))
+                .monospacedDigit()
+                .foregroundStyle(ok ? .green : .red)
+        }
+    }
+}
+
+struct ARSheetView: View {
+    @Binding var scannedDimensions: SIMD3<Float>?
+    @Binding var isPresented: Bool
+    
+    var body: some View {
+        ZStack(alignment: .bottom) {
+            ARScanView(scannedDimensions: $scannedDimensions)
+                .ignoresSafeArea()
+            
+            VStack(spacing: 12) {
+                Text("Place box on a flat surface, then tap it")
+                    .font(.subheadline)
+                    .padding(10)
+                    .background(.ultraThinMaterial)
+                    .clipShape(Capsule())
+                
+                if scannedDimensions != nil {
+                    Button("Done") { isPresented = false }
+                        .buttonStyle(.borderedProminent)
+                }
+            }
+            .padding(.bottom, 40)
+        }
+    }
 }

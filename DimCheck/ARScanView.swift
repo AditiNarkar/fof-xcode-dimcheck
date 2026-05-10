@@ -103,12 +103,12 @@ class Coordinator: NSObject, ARSessionDelegate {
         let minHeight: Float = 0.005       // above surface noise (5mm)
         let ceilHeight: Float = 0.5         // below 50cm ceiling
         
-        guard let meshAnchors = frame.anchors.compactMap({ $0 as? ARMeshAnchor }) as? [ARMeshAnchor] else { return }
+//        guard let meshAnchors = frame.anchors.compactMap({ $0 as? ARMeshAnchor }) as? [ARMeshAnchor] else { return }
         
         // step 2: walk every LiDAR mesh vertex
         // ARKit divides the mesh into chunks called ARMeshAnchors
         
-        for anchor in arView.session.currentFrame?.anchors ?? [] {
+        for anchor in frame.anchors {
             guard let meshAnchor = anchor as? ARMeshAnchor else { continue }
             
             // Get geometry
@@ -172,5 +172,27 @@ extension ARMeshGeometry {
             .advanced(by: vertexOffset) // (2)
             .assumingMemoryBound(to: SIMD3<Float>.self) // (3)
             .pointee // (4)
+    }
+}
+
+
+func estimateTapPosition(points: [SIMD3<Float>], surfaceY: Float) -> SIMD3<Float> {
+    let above = points.filter { $0.y > surfaceY + 0.01 }
+    guard !above.isEmpty else { return .zero }
+    let cx = above.map(\.x).reduce(0, +) / Float(above.count)
+    let cz = above.map(\.z).reduce(0, +) / Float(above.count)
+    return SIMD3<Float>(cx, surfaceY, cz)
+}
+
+func extractObjectPoints(_ pts: [SIMD3<Float>],
+                          surfaceY: Float,
+                          tapXZ: SIMD3<Float>,
+                          radius: Float = 0.35) -> [SIMD3<Float>] {
+    pts.filter { p in
+        let dx = p.x - tapXZ.x
+        let dz = p.z - tapXZ.z
+        let dist = sqrt(dx * dx + dz * dz)
+        let height = p.y - surfaceY
+        return dist < radius && height > 0.005 && height < 0.5
     }
 }

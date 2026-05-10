@@ -11,7 +11,8 @@ import SwiftUI
 struct DimCheckApp: App {
     var body: some Scene {
         WindowGroup {
-            ContentView()
+//            ContentView()
+            CatalogueView()
         }
     }
 }
